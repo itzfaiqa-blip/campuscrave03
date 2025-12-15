@@ -7,7 +7,7 @@ import {
   Trash2, LayoutDashboard, Utensils, Home, ListOrdered, History, TrendingUp, X, Edit2, Star
 } from 'lucide-react';
 import { User as UserType, Order, MenuItem, Review } from '../types';
-import { INITIAL_MENU_ITEMS, INITIAL_USERS, INITIAL_REVIEWS } from '../data';
+import { INITIAL_MENU_ITEMS, INITIAL_USERS } from '../data';
 
 // --- LOGIC: DISTANCE MAP FOR ROUTE OPTIMIZATION ---
 // Defined sequence: Lower is closer to start point (Cafeteria)
@@ -77,22 +77,38 @@ export default function Dashboard({ onBackToHome }: DashboardProps) {
     return saved ? JSON.parse(saved) : INITIAL_MENU_ITEMS;
   });
 
+  // START WITH ZERO ORDERS
   const [orders, setOrders] = useState<Order[]>(() => {
     const saved = localStorage.getItem('cc_orders');
     return saved ? JSON.parse(saved) : []; 
   });
 
+  // START WITH ZERO REVIEWS
   const [reviews, setReviews] = useState<Review[]>(() => {
       const saved = localStorage.getItem('cc_reviews');
-      return saved ? JSON.parse(saved) : INITIAL_REVIEWS;
+      return saved ? JSON.parse(saved) : [];
   });
 
+  // START WITH ZERO REVENUE
   const [weeklyRevenue, setWeeklyRevenue] = useState(() => {
     const saved = localStorage.getItem('cc_revenue');
-    return saved ? JSON.parse(saved) : 12500;
+    return saved ? JSON.parse(saved) : 0;
   });
 
-  const [currentUser, setCurrentUser] = useState<UserType | null>(null);
+  // Initialize currentUser from URL params to support multiple tabs
+  const [currentUser, setCurrentUser] = useState<UserType | null>(() => {
+    if (typeof window !== 'undefined') {
+        const params = new URLSearchParams(window.location.search);
+        const email = params.get('email');
+        if (email) {
+            const saved = localStorage.getItem('cc_users');
+            const allUsers = saved ? JSON.parse(saved) : INITIAL_USERS;
+            return allUsers.find((u: UserType) => u.email === email) || null;
+        }
+    }
+    return null;
+  });
+
   const [activeTab, setActiveTab] = useState('student'); 
   const [loginError, setLoginError] = useState(""); 
   const [cart, setCart] = useState<MenuItem[]>([]);
@@ -124,19 +140,35 @@ export default function Dashboard({ onBackToHome }: DashboardProps) {
     if (password !== "pass123") { setLoginError("⚠ Incorrect password. Please try again."); return; } // Simplified auth
     if (user.role !== activeTab) { setLoginError(`⚠ Access Denied. This account is for ${user.role.toUpperCase()}.`); return; }
     
-    setCurrentUser(user);
+    // Open Dashboard in a new tab
+    const url = new URL(window.location.href);
+    url.searchParams.set('email', email);
+    // Ensure view param is set
+    if (!url.searchParams.get('view')) url.searchParams.set('view', 'app');
+    window.open(url.toString(), '_blank');
   };
 
   const handleSignup = (name: string, email: string, password: string, phone: string) => {
     const newUser: UserType = { id: users.length + 1, name, email, role: 'student', phone };
-    setUsers([...users, newUser]);
-    setCurrentUser(newUser);
+    const updatedUsers = [...users, newUser];
+    setUsers(updatedUsers);
+    localStorage.setItem('cc_users', JSON.stringify(updatedUsers));
+    
+    // Automatically log in (open in new tab)
+    const url = new URL(window.location.href);
+    url.searchParams.set('email', newUser.email);
+    if (!url.searchParams.get('view')) url.searchParams.set('view', 'app');
+    window.open(url.toString(), '_blank');
   };
 
   const logout = () => { 
       setCurrentUser(null); 
       setCart([]); 
       setLoginError(""); 
+      // Remove email param from URL
+      const url = new URL(window.location.href);
+      url.searchParams.delete('email');
+      window.history.pushState({}, '', url);
   };
 
   // Safe State Update function for orders
@@ -146,6 +178,16 @@ export default function Dashboard({ onBackToHome }: DashboardProps) {
           const order = orders.find(o => o.id === id);
           if (order) setWeeklyRevenue((prev: number) => prev + order.total);
       }
+  };
+
+  // Modify Order Logic: Loads items to cart and removes the pending order
+  const handleModifyOrder = (orderId: string, items: MenuItem[]) => {
+      if (cart.length > 0) {
+          if (!window.confirm("Your cart currently has items. Modifying this order will overwrite your current cart. Continue?")) return;
+      }
+      setCart(items);
+      setOrders(prev => prev.filter(o => o.id !== orderId));
+      alert("Order loaded into cart for modification.");
   };
 
   const handleSubmitReview = (orderId: string, rating: number, text: string) => {
@@ -181,7 +223,6 @@ export default function Dashboard({ onBackToHome }: DashboardProps) {
             </h1>
             <div className="border-l-4 border-yellow-400 pl-6 py-2">
               <p className="text-2xl font-medium text-white opacity-95 tracking-wide">Food Delivery System</p>
-              <p className="text-lg text-orange-100">AI Route Optimization & Recommendations</p>
             </div>
           </div>
           <div className="relative z-10 space-y-5 mb-10">
@@ -207,7 +248,8 @@ export default function Dashboard({ onBackToHome }: DashboardProps) {
               <div className="inline-flex items-center justify-center p-4 rounded-full bg-orange-50 text-[#ea580c] mb-6 shadow-sm border border-orange-100">
                 <User size={40} />
               </div>
-              <h2 className="text-4xl font-bold text-gray-900">Welcome</h2>
+              {/* Reduced font size for Welcome */}
+              <h2 className="text-2xl font-bold text-gray-900">Welcome</h2>
               <p className="text-gray-500 mt-2">Sign in to your dashboard</p>
             </div>
 
@@ -268,6 +310,7 @@ export default function Dashboard({ onBackToHome }: DashboardProps) {
             myOrders={orders.filter(o => o.studentId === currentUser.id)} 
             updateStatus={safeUpdateStatus}
             submitReview={handleSubmitReview}
+            onModifyOrder={handleModifyOrder}
           />
         )}
         {currentUser.role === 'kitchen' && (
@@ -333,7 +376,7 @@ function LoginForm({ role, onLogin, onSignup, error }: any) {
 }
 
 // --- STUDENT DASHBOARD ---
-function StudentDashboard({ user, menu, cart, setCart, placeOrder, myOrders, updateStatus, submitReview }: any) {
+function StudentDashboard({ user, menu, cart, setCart, placeOrder, myOrders, updateStatus, submitReview, onModifyOrder }: any) {
   const [reviewModal, setReviewModal] = useState<{open: boolean, orderId: string | null}>({open: false, orderId: null});
   const [reviewForm, setReviewForm] = useState({rating: 5, text: ''});
 
@@ -502,7 +545,8 @@ function StudentDashboard({ user, menu, cart, setCart, placeOrder, myOrders, upd
                 
                 {o.status === 'PENDING' && (
                     <div className="flex gap-2 mt-3 pt-3 border-t border-gray-100">
-                        <button type="button" onClick={(e) => handleCancelOrder(e, o.id)} className="w-full py-2 bg-red-50 text-red-600 rounded-lg text-xs font-bold hover:bg-red-100 border border-red-100 flex items-center justify-center gap-1 transition-colors z-10 cursor-pointer"><X size={12}/> Cancel Order</button>
+                        <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); onModifyOrder(o.id, o.items); }} className="flex-1 py-2 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold hover:bg-blue-100 border border-blue-100 flex items-center justify-center gap-1 transition-colors cursor-pointer"><Edit2 size={12}/> Modify</button>
+                        <button type="button" onClick={(e) => handleCancelOrder(e, o.id)} className="flex-1 py-2 bg-red-50 text-red-600 rounded-lg text-xs font-bold hover:bg-red-100 border border-red-100 flex items-center justify-center gap-1 transition-colors z-10 cursor-pointer"><X size={12}/> Cancel</button>
                     </div>
                 )}
                 {o.status === 'DELIVERED' && !o.isReviewed && (

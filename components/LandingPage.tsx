@@ -6,7 +6,7 @@ import {
   ChefHat, Bike, Smartphone, Eye
 } from 'lucide-react';
 import { Review, MenuItem } from '../types';
-import { INITIAL_MENU_ITEMS, INITIAL_REVIEWS } from '../data';
+import { INITIAL_MENU_ITEMS } from '../data';
 
 interface LandingPageProps {
   onLogin: () => void;
@@ -18,10 +18,10 @@ export default function LandingPage({ onLogin, onNavigate }: LandingPageProps) {
   const [showFullMenu, setShowFullMenu] = useState(false);
   const [showAllReviews, setShowAllReviews] = useState(false);
   
-  // Load reviews from LocalStorage to reflect updates from Dashboard
+  // Load reviews from LocalStorage to reflect updates from Dashboard, start with empty if nothing saved
   const [reviews, setReviews] = useState<Review[]>(() => {
     const saved = localStorage.getItem('cc_reviews');
-    return saved ? JSON.parse(saved) : INITIAL_REVIEWS;
+    return saved ? JSON.parse(saved) : []; 
   });
 
   // Listen for changes in localStorage to update reviews in real-time if multiple tabs are open
@@ -334,38 +334,49 @@ export default function LandingPage({ onLogin, onNavigate }: LandingPageProps) {
                 {showAllReviews ? 'Show Less' : 'See All Reviews'} <ArrowRight size={20}/>
             </button>
           </div>
-          <div className="grid md:grid-cols-3 gap-8">
-            {displayedReviews.map(review => (
-              <div key={review.id} className="bg-gray-50 p-8 rounded-3xl relative hover:bg-white hover:shadow-xl transition-all duration-300 border border-transparent hover:border-gray-100 flex flex-col justify-between">
-                <div>
-                    <Quote className="absolute top-8 right-8 text-gray-200" size={40} />
-                    <div className="flex gap-1 mb-6">
-                    {[...Array(5)].map((_, i) => (
-                        <Star key={i} size={18} className={`${i < review.stars ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`} />
-                    ))}
+          
+          {reviews.length === 0 ? (
+            <div className="bg-gray-50 rounded-2xl p-12 text-center border border-dashed border-gray-200">
+              <Quote className="mx-auto text-gray-300 mb-4" size={48} />
+              <p className="text-lg text-gray-500 font-medium">No reviews yet. Be the first to order and share your experience!</p>
+            </div>
+          ) : (
+            <div className="grid md:grid-cols-3 gap-8">
+                {displayedReviews.map(review => (
+                <div key={review.id} className="bg-gray-50 p-8 rounded-3xl relative hover:bg-white hover:shadow-xl transition-all duration-300 border border-transparent hover:border-gray-100 flex flex-col justify-between">
+                    <div>
+                        <Quote className="absolute top-8 right-8 text-gray-200" size={40} />
+                        <div className="flex gap-1 mb-6">
+                        {[...Array(5)].map((_, i) => (
+                            <Star key={i} size={18} className={`${i < review.stars ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`} />
+                        ))}
+                        </div>
+                        <p className="text-gray-700 font-medium mb-8 relative z-10 leading-relaxed">"{review.text}"</p>
                     </div>
-                    <p className="text-gray-700 font-medium mb-8 relative z-10 leading-relaxed">"{review.text}"</p>
+                    <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-gradient-to-br from-gray-700 to-gray-900 rounded-full flex items-center justify-center text-white font-bold text-lg shadow-md">
+                        {review.name[0]}
+                    </div>
+                    <div>
+                        <p className="font-bold text-gray-900">{review.name}</p>
+                        <p className="text-xs text-gray-500 font-bold uppercase tracking-wide">{review.role}</p>
+                    </div>
+                    </div>
                 </div>
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-gradient-to-br from-gray-700 to-gray-900 rounded-full flex items-center justify-center text-white font-bold text-lg shadow-md">
-                    {review.name[0]}
-                  </div>
-                  <div>
-                    <p className="font-bold text-gray-900">{review.name}</p>
-                    <p className="text-xs text-gray-500 font-bold uppercase tracking-wide">{review.role}</p>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="mt-8 text-center md:hidden">
-              <button 
-                onClick={() => setShowAllReviews(!showAllReviews)}
-                className="inline-flex items-center gap-2 bg-white border border-gray-200 px-6 py-3 rounded-xl font-bold text-gray-600"
-            >
-                {showAllReviews ? 'Show Less' : 'See All Reviews'}
-            </button>
-          </div>
+                ))}
+            </div>
+          )}
+          
+          {reviews.length > 3 && (
+            <div className="mt-8 text-center md:hidden">
+                <button 
+                    onClick={() => setShowAllReviews(!showAllReviews)}
+                    className="inline-flex items-center gap-2 bg-white border border-gray-200 px-6 py-3 rounded-xl font-bold text-gray-600"
+                >
+                    {showAllReviews ? 'Show Less' : 'See All Reviews'}
+                </button>
+            </div>
+          )}
         </div>
       </section>
 
